@@ -1,10 +1,19 @@
 package academy.backend.market_pulse.repository.store.impl;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
+import academy.backend.market_pulse.client.InstrumentQuoteMapper;
+import academy.backend.market_pulse.dto.InstrumentQuoteDto;
 import academy.backend.market_pulse.model.Quote;
 import academy.backend.market_pulse.repository.store.QuoteFileStore;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * Заготовка для самостоятельной работы (см. «Требования к файловому хранилищу.md», семинар 7) —
@@ -14,19 +23,38 @@ import academy.backend.market_pulse.repository.store.QuoteFileStore;
  */
 public class QuoteFileStoreSkeleton implements QuoteFileStore {
 
+    private final ObjectMapper mapper = new ObjectMapper();
+
     @Override
     public void save(Path path, List<Quote> quotes) {
-        // TODO: сохранить котировки в файл по указанному пути.
-        //  Подсказка: на каждую котировку нужно сохранить тикер, тип и валюту инструмента (чтобы
-        //  потом восстановить его через InstrumentFactories.create), а также цену и изменение за
-        //  период — этого достаточно, чтобы собрать Quote обратно.
-        throw new UnsupportedOperationException("TODO: реализовать сохранение котировок в файл");
+        List<InstrumentQuoteDto> dtos = new ArrayList<>();
+        for (Quote quote : quotes) {
+            dtos.add(InstrumentQuoteMapper.toDto(quote));
+        }
+        try {
+            Files.createDirectories(path.toAbsolutePath().getParent());
+            String json = mapper.writeValueAsString(dtos);
+            Files.writeString(path, json);
+        } catch (IOException e) {
+            throw new UncheckedIOException("Не удалось сохранить котировки: " + path, e);
+        }
     }
 
     @Override
     public List<Quote> load(Path path) {
-        // TODO: прочитать котировки из файла и восстановить при старте.
-        //  Если файла ещё нет (первый запуск) — вернуть пустой список, а не бросать исключение.
-        throw new UnsupportedOperationException("TODO: реализовать чтение котировок из файла");
+        try {
+            String json = Files.readString(path);
+            InstrumentQuoteDto[] dtos = mapper.readValue(json, InstrumentQuoteDto[].class);
+
+            List<Quote> quotes = new ArrayList<>();
+            for (InstrumentQuoteDto dto : dtos) {
+                quotes.add(InstrumentQuoteMapper.toQuote(dto));
+            }
+            return quotes;
+        } catch (NoSuchFileException e) {
+            return List.of();
+        } catch (IOException e) {
+            throw new UncheckedIOException("Не удалось прочитать котировки: " + path, e);
+        }
     }
 }
